@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -24,6 +25,18 @@ pipeline {
                     sh 'npm ci'
                     sh 'npm run build'
                 }
+            }
+        }
+
+        stage('Build Backend Docker Image') {
+            steps {
+                sh 'docker build -t stackstorm-backend:latest ./backend'
+            }
+        }
+
+        stage('Build Frontend Docker Image') {
+            steps {
+                sh 'docker build -t stackstorm-frontend:latest ./frontend'
             }
         }
     }
