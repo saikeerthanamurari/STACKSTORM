@@ -1,0 +1,32 @@
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: stackstorm-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    build: ./backend
+    container_name: stackstorm-backend
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      PORT: 5001
+      MONGO_URI: mongodb://mongo:27017/stackstorm
+      JWT_SECRET: stackstorm_local_dev_secret
+    depends_on:
+      - mongo
+
+  frontend:
+    build: ./frontend
+    container_name: stackstorm-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
