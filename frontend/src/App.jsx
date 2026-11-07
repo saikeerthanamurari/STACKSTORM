@@ -67,6 +67,9 @@ function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState("");
+
   const [currentUser, setCurrentUser] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -89,18 +92,26 @@ function App() {
 
   answersRef.current = answers;
 
-  // Login and registration
+  // Login and OTP registration
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
     setLoading(true);
 
     try {
-      const endpoint = isRegistering ? "/register" : "/login";
+      let endpoint;
+      let body;
 
-      const body = isRegistering
-        ? { name, email, password }
-        : { email, password };
+      if (isRegistering && !otpSent) {
+        endpoint = "/register";
+        body = { name, email, password };
+      } else if (isRegistering && otpSent) {
+        endpoint = "/verify-otp";
+        body = { email, otp };
+      } else {
+        endpoint = "/login";
+        body = { email, password };
+      }
 
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
@@ -116,17 +127,35 @@ function App() {
         throw new Error(data.message || "Something went wrong.");
       }
 
-      if (isRegistering) {
-        setError("Registration successful! You can now sign in.");
+      // OTP sent successfully
+      if (isRegistering && !otpSent) {
+        setOtpSent(true);
+        setError(
+          data.message || "Verification code sent to your email."
+        );
+        return;
+      }
+
+      // OTP verified successfully
+      if (isRegistering && otpSent) {
+        setError(
+          "Email verified successfully! You can now sign in."
+        );
+
         setIsRegistering(false);
+        setOtpSent(false);
+        setOtp("");
         setRole("Student");
         setName("");
         setPassword("");
         return;
       }
 
+      // Normal login
       if (data.student.role !== role.toLowerCase()) {
-        throw new Error(`This account is not registered as ${role}.`);
+        throw new Error(
+          `This account is not registered as ${role}.`
+        );
       }
 
       sessionStorage.setItem("stackstormToken", data.token);
@@ -138,8 +167,11 @@ function App() {
       setSelectedExam(null);
       setExamData(null);
       setExamResult(null);
+
     } catch (err) {
-      setError(err.message || "Unable to connect to the server.");
+      setError(
+        err.message || "Unable to connect to the server."
+      );
     } finally {
       setLoading(false);
     }
@@ -155,6 +187,8 @@ function App() {
     setPassword("");
     setError("");
     setIsRegistering(false);
+    setOtp("");
+    setOtpSent(false);
     setSelectedExam(null);
     setExamData(null);
     setExamResult(null);
@@ -195,7 +229,9 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Unable to start examination.");
+        throw new Error(
+          data.message || "Unable to start examination."
+        );
       }
 
       submittingRef.current = false;
@@ -211,6 +247,7 @@ function App() {
           Math.ceil((data.expiresAt - Date.now()) / 1000)
         )
       );
+
     } catch (err) {
       setNotice(err.message);
     } finally {
@@ -245,7 +282,9 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Examination submission failed.");
+        throw new Error(
+          data.message || "Examination submission failed."
+        );
       }
 
       setExamResult(data);
@@ -258,6 +297,7 @@ function App() {
           ? "Time expired. Your answers were submitted automatically."
           : "Your examination was submitted successfully."
       );
+
     } catch (err) {
       submittingRef.current = false;
       setNotice(err.message);
@@ -294,7 +334,9 @@ function App() {
   // Navigation
   function goToPage(page) {
     if (examData) {
-      setNotice("Please submit your active examination before navigating away.");
+      setNotice(
+        "Please submit your active examination before navigating away."
+      );
       return;
     }
 
@@ -355,18 +397,26 @@ function App() {
             <div className="mobile-brand">STACKSTORM</div>
 
             <span className="eyebrow">
-              {isRegistering ? "CREATE YOUR ACCOUNT" : "WELCOME BACK"}
+              {isRegistering
+                ? otpSent
+                  ? "EMAIL VERIFICATION"
+                  : "CREATE YOUR ACCOUNT"
+                : "WELCOME BACK"}
             </span>
 
             <h2>
               {isRegistering
-                ? "Create a student account"
+                ? otpSent
+                  ? "Verify your email"
+                  : "Create a student account"
                 : "Sign in to your account"}
             </h2>
 
             <p className="muted">
               {isRegistering
-                ? "Enter your details to register."
+                ? otpSent
+                  ? "Enter the 6-digit verification code sent to your email."
+                  : "Enter your details to register."
                 : "Enter your details to access your dashboard."}
             </p>
 
@@ -389,7 +439,7 @@ function App() {
             )}
 
             <form onSubmit={handleSubmit}>
-              {isRegistering && (
+              {isRegistering && !otpSent && (
                 <>
                   <label>Full name</label>
                   <input
@@ -408,24 +458,50 @@ function App() {
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                readOnly={isRegistering && otpSent}
                 required
               />
 
-              <label>Password</label>
-              <input
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                minLength={8}
-                required
-              />
+              {isRegistering && otpSent ? (
+                <>
+                  <label>Verification code</label>
+                  <input
+                    type="text"
+                    placeholder="Enter 6-digit OTP"
+                    value={otp}
+                    onChange={(e) =>
+                      setOtp(
+                        e.target.value.replace(/\D/g, "").slice(0, 6)
+                      )
+                    }
+                    inputMode="numeric"
+                    maxLength={6}
+                    pattern="[0-9]{6}"
+                    required
+                  />
+                </>
+              ) : (
+                <>
+                  <label>Password</label>
+                  <input
+                    type="password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    minLength={8}
+                    required
+                  />
+                </>
+              )}
 
               {error && (
                 <p
                   role="alert"
                   style={{
-                    color: "#ff7777",
+                    color:
+                      isRegistering && otpSent
+                        ? "#a99aff"
+                        : "#ff7777",
                     marginTop: "12px"
                   }}
                 >
@@ -454,7 +530,9 @@ function App() {
                 {loading
                   ? "Please wait..."
                   : isRegistering
-                    ? "Create account →"
+                    ? otpSent
+                      ? "Verify OTP →"
+                      : "Send verification code →"
                     : `Sign in as ${role} →`}
               </button>
             </form>
@@ -470,6 +548,9 @@ function App() {
                   setIsRegistering(!isRegistering);
                   setError("");
                   setPassword("");
+                  setOtp("");
+                  setOtpSent(false);
+                  setName("");
                 }}
                 style={{
                   background: "none",
@@ -484,6 +565,27 @@ function App() {
                   : "Create an account"}
               </button>
             </p>
+
+            {isRegistering && otpSent && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOtp("");
+                  setOtpSent(false);
+                  setError("");
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#a99aff",
+                  cursor: "pointer",
+                  font: "inherit",
+                  marginTop: "12px"
+                }}
+              >
+                ← Back to registration
+              </button>
+            )}
           </div>
         </section>
       </main>
@@ -757,7 +859,9 @@ function App() {
                     disabled={submitting}
                     onClick={() => submitExam(false)}
                   >
-                    {submitting ? "Submitting..." : "Submit Examination"}
+                    {submitting
+                      ? "Submitting..."
+                      : "Submit Examination"}
                   </button>
                 )}
               </div>
@@ -850,7 +954,9 @@ function App() {
                   onClick={startExam}
                   disabled={examLoading}
                 >
-                  {examLoading ? "Starting..." : "Start Exam →"}
+                  {examLoading
+                    ? "Starting..."
+                    : "Start Exam →"}
                 </button>
               </div>
             </div>
