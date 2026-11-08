@@ -6,7 +6,12 @@ pipeline {
         nodejs 'NodeJS-22'
     }
 
+    environment {
+        KUBECONFIG = '/var/jenkins_home/.kube/config'
+    }
+
     stages {
+
         stage('Backend Validation') {
             steps {
                 dir('backend') {
@@ -30,13 +35,49 @@ pipeline {
 
         stage('Build Backend Docker Image') {
             steps {
-                sh 'docker build -t stackstorm-backend:latest ./backend'
+                sh '''
+                    docker build \
+                    -t stackstorm-backend:${BUILD_NUMBER} \
+                    -t stackstorm-backend:latest ./backend
+                '''
             }
         }
 
         stage('Build Frontend Docker Image') {
             steps {
-                sh 'docker build -t stackstorm-frontend:latest ./frontend'
+                sh '''
+                    docker build \
+                    -t stackstorm-frontend:${BUILD_NUMBER} \
+                    -t stackstorm-frontend:latest ./frontend
+                '''
+            }
+        }
+
+        stage('Transfer Images to Minikube') {
+            steps {
+                sh '''
+                    docker save stackstorm-backend:${BUILD_NUMBER} \
+                    | docker exec -i minikube ctr -n k8s.io images import -
+
+                    docker save stackstorm-frontend:${BUILD_NUMBER} \
+                    | docker exec -i minikube ctr -n k8s.io images import -
+                '''
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh '''
+                    kubectl set image deployment/backend \
+                    backend=stackstorm-backend:${BUILD_NUMBER}
+
+                    kubectl set image deployment/frontend \
+                    frontend=stackstorm-frontend:${BUILD_NUMBER}
+
+                    kubectl rollout status deployment/backend --timeout=120s
+
+                    kubectl rollout status deployment/frontend --timeout=120s
+                '''
             }
         }
     }
