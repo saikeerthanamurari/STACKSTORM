@@ -68,6 +68,9 @@ function App() {
   const [examLoading, setExamLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [myResults, setMyResults] = useState([]);
+  const [adminResults, setAdminResults] = useState([]);
+  const [resultsLoading, setResultsLoading] = useState(false);
+
 
   const submittingRef = useRef(false);
   const answersRef = useRef(answers);
@@ -204,7 +207,26 @@ function App() {
     if (role === "Student" && activePage === "My Results") {
       loadMyResults();
     }
+    if (role === "Admin" && activePage === "Results") {
+      loadAdminResults();
+    }
   }, [loggedIn, role, activePage]);
+
+  async function loadAdminResults() {
+    setResultsLoading(true);
+    try {
+      const response = await fetch(`${EXAM_API_URL}/admin/results`, {
+        headers: authHeaders()
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Unable to load results.");
+      setAdminResults(Array.isArray(data) ? data : data.results || []);
+    } catch (err) {
+      setNotice(err.message);
+    } finally {
+      setResultsLoading(false);
+    }
+  }
 
   function updateAdminQuestion(index, field, value) {
     setAdminQuestions((previous) =>
@@ -699,6 +721,38 @@ function App() {
                   {exams.length === 0 && <p className="muted">No examinations are available yet.</p>}
                 </div>
               )}
+            </div>
+          ) : activePage === "Results" && role === "Admin" ? (
+            <div style={{ marginTop: 30, padding: 25, background: "#151e33", border: "1px solid #2b3854", borderRadius: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <h2>Student Examination Results</h2>
+                <button className="exam-action" onClick={loadAdminResults}>Refresh</button>
+              </div>
+              {resultsLoading ? <p>Loading results...</p> :
+                adminResults.length === 0 ? <p>No examination submissions found.</p> : (
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", textAlign: "left", borderCollapse: "collapse", minWidth: 700 }}>
+                      <thead>
+                        <tr>
+                          {["Student", "Email", "Exam", "Correct", "Score", "Percentage", "Submitted"].map(x => <th key={x} style={{ padding: 12 }}>{x}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {adminResults.map(result => (
+                          <tr key={result._id}>
+                            <td style={{ padding: 12 }}>{result.student?.name || "Unknown"}</td>
+                            <td style={{ padding: 12 }}>{result.student?.email || "—"}</td>
+                            <td style={{ padding: 12 }}>{result.exam?.title || "Deleted exam"}</td>
+                            <td style={{ padding: 12 }}>{result.correctAnswers}/{result.totalQuestions}</td>
+                            <td style={{ padding: 12 }}>{result.score}</td>
+                            <td style={{ padding: 12 }}>{result.percentage}%</td>
+                            <td style={{ padding: 12 }}>{new Date(result.submittedAt).toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
             </div>
           ) : activePage === "Overview" ? (
             <>

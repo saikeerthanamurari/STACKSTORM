@@ -413,4 +413,18 @@ router.get("/my-results", authenticate, requireStudent, async (req, res) => {
   }
 });
 
+
+router.get("/admin/results", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const results = await Result.find()
+      .populate("student", "name email")
+      .populate("exam", "title code subject")
+      .sort({ submittedAt: -1 });
+
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ message: "Unable to fetch examination results." });
+  }
+});
+
 module.exports = router;
